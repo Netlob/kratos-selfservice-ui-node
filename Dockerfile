@@ -14,6 +14,8 @@ RUN npm ci
 
 COPY . /usr/src/app
 
+RUN npm install -g typescript
+
 RUN if [ "$LINK" == "true" ]; then (cd ./contrib/sdk/generated; rm -rf node_modules; npm ci; npm run build); \
     cp -r ./contrib/sdk/generated/* node_modules/@ory/kratos-client/; \
     fi

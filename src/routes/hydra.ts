@@ -61,7 +61,9 @@ const redirectToLogin = (req: Request, res: Response, next: NextFunction) => {
       'kratos.browser': config.kratos.browser,
     })
     const baseUrl = configBaseUrl || `${req.protocol}://${req.headers.host}`
-    const returnTo = new URL(req.url, baseUrl)
+    const rel_url = (req.url.slice(0,1) == '/') ? req.url.slice(1) : req.url
+    console.debug('My URLS: ',{rel_url,baseUrl})
+    const returnTo = new URL(rel_url, baseUrl)
     returnTo.searchParams.set('hydra_login_state', state)
     console.debug(`returnTo: "${returnTo.toString()}"`, returnTo)
 
