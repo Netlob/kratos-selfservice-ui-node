@@ -61,7 +61,9 @@ const redirectToLogin = (req: Request, res: Response, next: NextFunction) => {
       'kratos.browser': config.kratos.browser,
     })
     const baseUrl = configBaseUrl || `${req.protocol}://${req.headers.host}`
-    const returnTo = new URL(req.url, baseUrl)
+    const rel_url = (req.url.slice(0,1) == '/') ? req.url.slice(1) : req.url
+    console.debug('My URLS: ',{rel_url,baseUrl})
+    const returnTo = new URL(rel_url, baseUrl)
     returnTo.searchParams.set('hydra_login_state', state)
     console.debug(`returnTo: "${returnTo.toString()}"`, returnTo)
 
@@ -170,6 +172,7 @@ export const hydraLogin = (req: Request, res: Response, next: NextFunction) => {
           // We need to know who the user is for hydra
           .toSession(undefined, req.header('Cookie'))
           .then(({ data: body }) => {
+            console.log('got following body from kratos',JSON.stringify(body))
             // We need to get the email of the user. We don't want to do that via traits as
             // they are dynamic. They would be part of the PublicAPI. That's not true
             // for identity.addresses So let's get it via the AdmninAPI
@@ -197,26 +200,29 @@ const createHydraSession = (
   requestedScope: string[] = [],
   context: Session
 ) => {
-  const verifiableAddresses = context.identity.verifiable_addresses || []
-  if (
-    requestedScope.indexOf('email') === -1 ||
-    verifiableAddresses.length === 0
-  ) {
-    return {}
-  }
+      const verifiableAddresses = context.identity.verifiable_addresses || []
+      // This data will be available when introspecting the token. Try to avoid sensitive information here,
+      // unless you limit who can introspect tokens. (Therefore the scope-check above)
+      // access_token: { foo: 'bar' },
 
-  return {
-    // This data will be available when introspecting the token. Try to avoid sensitive information here,
-    // unless you limit who can introspect tokens. (Therefore the scope-check above)
-    // access_token: { foo: 'bar' },
-
-    // This data will be available in the ID token.
-    // Most services need email-addresses, so let's include that.
-    id_token: {
-      email: verifiableAddresses[0].value as Object, // FIXME Small typescript workaround caused by a bug in Go-swagger
-    },
-  }
-}
+      // This data will be available in the ID token.
+      var id_token: {[k: string]: any} = {};
+      console.log("context",JSON.stringify(context))
+      // Most services need email-addresses, so let's include that.
+      if ((requestedScope.indexOf('email') != -1) && (verifiableAddresses.length != 0)){
+          id_token.email = verifiableAddresses[0].value as Object // FIXME Small typescript workaround caused by a bug in Go-swagger
+      }
+      const traits = context.identity.traits || {}
+      if ("name" in traits){
+          if (typeof traits.name === 'string' || traits.name instanceof String){
+              id_token.name = traits.name
+          } else if (("first" in traits.name) && ("last" in traits.name)){
+              id_token.name = `${traits.name.first} ${traits.name.last}`
+          }
+      }
+      console.log("id_token",JSON.stringify(id_token))
+      return { id_token }
+    }
 
 export const hydraGetConsent = (
   req: Request,
@@ -257,6 +263,7 @@ export const hydraGetConsent = (
           body.context as Session
         )
 
+        console.log('Giving session data to hydra:',acceptConsentRequest.session);
         return hydraClient
           .acceptConsentRequest(challenge, acceptConsentRequest)
           .then(({ data: body }) => {
